@@ -16,6 +16,7 @@ let supabase;
 function createNoteElement(note) {
   const div = document.createElement("div");
   div.className = "list-group-item";
+  div.setAttribute('data-note-id', note.id); // Add note ID as data attribute
   div.innerHTML = `
     ${note.text}
     <small class="text-muted">${new Date(note.created_at).toLocaleString()}</small>
@@ -26,14 +27,24 @@ function createNoteElement(note) {
   const deleteBtn = div.querySelector('button');
   deleteBtn.addEventListener('click', async () => {
     try {
+      // Disable button and show deleting state
+      deleteBtn.disabled = true;
+      deleteBtn.textContent = 'Deleting...';
+
       const { error } = await supabase
         .from('notes')
         .delete()
         .eq('id', note.id);
       if (error) throw error;
+
+      // Remove element immediately for better UX
+      div.remove();
     } catch (error) {
       console.error("Error deleting note:", error);
       alert("Error deleting note. Please try again.");
+      // Reset button state
+      deleteBtn.disabled = false;
+      deleteBtn.textContent = 'Delete';
     }
   });
 
@@ -66,44 +77,49 @@ async function addNote() {
 }
 
 // Function to setup real-time notes listener
-function setupNotesListener(userId) {
-  console.log('Setting up realtime listener for user:', userId);
-  
-  // First, clean up any existing subscriptions
-  supabase.removeAllChannels();
+async function setupNotesListener(userId) {
+  try {
+    await supabase.removeAllChannels();
 
-  const channel = supabase
-    .channel('public:notes')
-    .on('postgres_changes', 
-      { event: '*', schema: 'public', table: 'notes', filter: `user_id=eq.${userId}` },
-      (payload) => {
-        console.log('Received realtime event:', payload);
-        
-        if (payload.eventType === 'INSERT') {
-          console.log('Inserting new note:', payload.new);
-          const noteElement = createNoteElement(payload.new);
-          notesList.insertBefore(noteElement, notesList.firstChild);
-        } 
-        else if (payload.eventType === 'DELETE') {
-          console.log('Deleting note:', payload.old);
-          // Find the note element by its button's data-id
-          const buttons = notesList.querySelectorAll('button[data-id]');
-          for (const button of buttons) {
-            if (button.getAttribute('data-id') === payload.old.id) {
-              const noteElement = button.closest('.list-group-item');
-              if (noteElement) {
-                console.log('Found and removing note element');
-                noteElement.remove();
-                break;
-              }
-            }
+    const channel = supabase.channel(`notes:${userId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notes',
+        filter: `user_id=eq.${userId}`
+      }, (payload) => {
+        notesList.querySelector('.empty-message')?.remove();
+        const noteElement = createNoteElement(payload.new);
+        notesList.insertBefore(noteElement, notesList.firstChild);
+      })
+      .on('postgres_changes', {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'notes',
+        filter: `user_id=eq.${userId}`
+      }, (payload) => {
+        const noteElement = notesList.querySelector(`[data-note-id="${payload.old.id}"]`) || 
+                           notesList.querySelector(`button[data-id="${payload.old.id}"]`)?.closest('.list-group-item');
+        if (noteElement) {
+          noteElement.remove();
+          if (notesList.children.length === 0) {
+            notesList.innerHTML = `<div class="list-group-item text-center text-muted empty-message">
+              No notes yet. Add your first note above!
+            </div>`;
           }
         }
-      }
-    )
-    .subscribe((status) => {
-      console.log('Subscription status:', status);
-    });
+      })
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') {
+          loadNotes(userId);
+        }
+      });
+
+    return channel;
+  } catch (error) {
+    console.error('Error in setupNotesListener:', error);
+    throw error;
+  }
 }
 
 // Initial load of notes
@@ -118,9 +134,9 @@ async function loadNotes(userId) {
     if (error) throw error;
 
     notesList.innerHTML = "";
-    if (data.length === 0) {
+    if (!data || data.length === 0) {
       const emptyMessage = document.createElement("div");
-      emptyMessage.className = "list-group-item text-center text-muted";
+      emptyMessage.className = "list-group-item text-center text-muted empty-message";
       emptyMessage.textContent = "No notes yet. Add your first note above!";
       notesList.appendChild(emptyMessage);
     } else {
@@ -134,59 +150,40 @@ async function loadNotes(userId) {
   }
 }
 
-// Wait for the page and Supabase SDK to load
+// Initialize app when page loads
 window.addEventListener('load', async () => {
-  // Initialize Supabase
-  supabase = initSupabase();
-  if (!supabase) {
-    console.error('Failed to initialize Supabase');
-    return;
+  try {
+    supabase = await initSupabase();
+    if (!supabase) return;
+
+    // Auth event handlers
+    loginButton.addEventListener("click", () => 
+      supabase.auth.signInWithOAuth({ provider: 'google' })
+        .catch(error => console.error("Login error:", error))
+    );
+
+    logoutButton.addEventListener("click", () => 
+      supabase.auth.signOut()
+        .catch(error => console.error("Logout error:", error))
+    );
+
+    submitNote.addEventListener("click", addNote);
+
+    // Handle auth state
+    supabase.auth.onAuthStateChange((_, session) => {
+      const isAuthenticated = !!session;
+      loginSection.classList.toggle("hidden", isAuthenticated);
+      appSection.classList.toggle("hidden", !isAuthenticated);
+      userEmail.textContent = session?.user?.email || "";
+      
+      if (isAuthenticated) {
+        loadNotes(session.user.id);
+        setupNotesListener(session.user.id);
+      } else {
+        notesList.innerHTML = "";
+      }
+    });
+  } catch (error) {
+    console.error('Initialization error:', error);
   }
-
-  // Login with Google
-  loginButton.addEventListener("click", async () => {
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google'
-      });
-      if (error) throw error;
-    } catch (error) {
-      console.error("Error during login:", error);
-      alert("Error during login. Please try again.");
-    }
-  });
-
-  // Logout
-  logoutButton.addEventListener("click", async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-    } catch (error) {
-      console.error("Error during logout:", error);
-      alert("Error during logout. Please try again.");
-    }
-  });
-
-  // Submit note on button click
-  submitNote.addEventListener("click", addNote);
-
-  // Listen for auth state changes
-  supabase.auth.onAuthStateChange((event, session) => {
-    if (session) {
-      // User is signed in
-      loginSection.classList.add("hidden");
-      appSection.classList.remove("hidden");
-      userEmail.textContent = session.user.email;
-
-      // Load initial notes and setup real-time listener
-      loadNotes(session.user.id);
-      setupNotesListener(session.user.id);
-    } else {
-      // User is signed out
-      loginSection.classList.remove("hidden");
-      appSection.classList.add("hidden");
-      userEmail.textContent = "";
-      notesList.innerHTML = "";
-    }
-  });
 });
