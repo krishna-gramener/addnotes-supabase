@@ -17,8 +17,7 @@ async function initSupabase() {
             },
             auth: {
                 persistSession: true,
-                autoRefreshToken: true,
-                redirectTo: 'https://krishna-gramener.github.io/addnotes-supabase/'
+                autoRefreshToken: true
             },
             realtime: {
                 params: {

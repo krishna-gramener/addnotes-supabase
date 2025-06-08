@@ -1,5 +1,5 @@
-import { initSupabase } from './supabaseConfig.js';
-import { createNoteElement } from './noteElement.js';
+import { initSupabase } from "./supabaseConfig.js";
+import { createNoteElement } from "./noteElement.js";
 // DOM Elements
 const loginSection = document.getElementById("loginSection");
 const appSection = document.getElementById("appSection");
@@ -18,17 +18,19 @@ async function addNote() {
   const noteText = noteInput.value.trim();
   if (!noteText) return;
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return;
 
   try {
-    const { error } = await supabase
-      .from('notes')
-      .insert([{
+    const { error } = await supabase.from("notes").insert([
+      {
         text: noteText,
-        user_id: user.id
-      }]);
-    
+        user_id: user.id,
+      },
+    ]);
+
     if (error) throw error;
     noteInput.value = "";
     noteInput.focus();
@@ -43,43 +45,53 @@ async function setupNotesListener(userId) {
   try {
     await supabase.removeAllChannels();
 
-    const channel = supabase.channel(`notes:${userId}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notes',
-        filter: `user_id=eq.${userId}`
-      }, (payload) => {
-        notesList.querySelector('.empty-message')?.remove();
-        const noteElement = createNoteElement(payload.new, supabase);
-        notesList.insertBefore(noteElement, notesList.firstChild);
-      })
-      .on('postgres_changes', {
-        event: 'DELETE',
-        schema: 'public',
-        table: 'notes',
-        filter: `user_id=eq.${userId}`
-      }, (payload) => {
-        const noteElement = notesList.querySelector(`[data-note-id="${payload.old.id}"]`) || 
-                           notesList.querySelector(`button[data-id="${payload.old.id}"]`)?.closest('.list-group-item');
-        if (noteElement) {
-          noteElement.remove();
-          if (notesList.children.length === 0) {
-            notesList.innerHTML = `<div class="list-group-item text-center text-muted empty-message">
+    const channel = supabase
+      .channel(`notes:${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notes",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          notesList.querySelector(".empty-message")?.remove();
+          const noteElement = createNoteElement(payload.new, supabase);
+          notesList.insertBefore(noteElement, notesList.firstChild);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "notes",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const noteElement =
+            notesList.querySelector(`[data-note-id="${payload.old.id}"]`) ||
+            notesList.querySelector(`button[data-id="${payload.old.id}"]`)?.closest(".list-group-item");
+          if (noteElement) {
+            noteElement.remove();
+            if (notesList.children.length === 0) {
+              notesList.innerHTML = `<div class="list-group-item text-center text-muted empty-message">
               No notes yet. Add your first note above!
             </div>`;
+            }
           }
         }
-      })
-      .subscribe(status => {
-        if (status === 'SUBSCRIBED') {
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
           loadNotes(userId);
         }
       });
 
     return channel;
   } catch (error) {
-    console.error('Error in setupNotesListener:', error);
+    console.error("Error in setupNotesListener:", error);
     throw error;
   }
 }
@@ -88,10 +100,10 @@ async function setupNotesListener(userId) {
 async function loadNotes(userId) {
   try {
     const { data, error } = await supabase
-      .from('notes')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+      .from("notes")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
 
     if (error) throw error;
 
@@ -102,7 +114,7 @@ async function loadNotes(userId) {
       emptyMessage.textContent = "No notes yet. Add your first note above!";
       notesList.appendChild(emptyMessage);
     } else {
-      data.forEach(note => {
+      data.forEach((note) => {
         const noteElement = createNoteElement(note, supabase);
         notesList.appendChild(noteElement);
       });
@@ -113,20 +125,25 @@ async function loadNotes(userId) {
 }
 
 // Initialize app when page loads
-window.addEventListener('load', async () => {
+window.addEventListener("load", async () => {
   try {
     supabase = await initSupabase();
     if (!supabase) return;
 
     // Auth event handlers
-    loginButton.addEventListener("click", () => 
-      supabase.auth.signInWithOAuth({ provider: 'google' })
-        .catch(error => console.error("Login error:", error))
+    loginButton.addEventListener("click", () =>
+      supabase.auth
+        .signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: "https://krishna-gramener.github.io/addnotes-supabase/", // your redirect URL
+          },
+        })
+        .catch((error) => console.error("Login error:", error))
     );
 
-    logoutButton.addEventListener("click", () => 
-      supabase.auth.signOut()
-        .catch(error => console.error("Logout error:", error))
+    logoutButton.addEventListener("click", () =>
+      supabase.auth.signOut().catch((error) => console.error("Logout error:", error))
     );
 
     submitNote.addEventListener("click", addNote);
@@ -137,7 +154,7 @@ window.addEventListener('load', async () => {
       loginSection.classList.toggle("hidden", isAuthenticated);
       appSection.classList.toggle("hidden", !isAuthenticated);
       userEmail.textContent = session?.user?.email || "";
-      
+
       if (isAuthenticated) {
         loadNotes(session.user.id);
         setupNotesListener(session.user.id);
@@ -146,6 +163,6 @@ window.addEventListener('load', async () => {
       }
     });
   } catch (error) {
-    console.error('Initialization error:', error);
+    console.error("Initialization error:", error);
   }
 });
