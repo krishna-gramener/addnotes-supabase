@@ -134,7 +134,10 @@ window.addEventListener("load", async () => {
     loginButton.addEventListener("click", () =>
       supabase.auth
         .signInWithOAuth({
-          provider: "google"
+          provider: "google",
+          options: {
+            redirectTo: "https://krishna-gramener.github.io/addnotes-supabase/", // your redirect URLAdd commentMore actions
+          },
         })
         .catch((error) => console.error("Login error:", error))
     );
