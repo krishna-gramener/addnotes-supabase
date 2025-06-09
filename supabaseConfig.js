@@ -6,7 +6,12 @@ let supabase = null;
 export async function initSupabase() {
     try {
         if (!supabase && window.supabase) {
-            supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+            supabase = window.supabase.createClient(supabaseUrl, supabaseKey, {
+                auth: {
+                  persistSession: true,
+                  autoRefreshToken: true,
+                },
+              });
             const { error } = await supabase.auth.getSession();
             if (error) throw error;
         }
