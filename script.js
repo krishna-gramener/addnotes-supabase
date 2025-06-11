@@ -14,11 +14,9 @@ async function initSupabase() {
 }
 
 async function deleteNote(id, element) {
-  const {error} = await supabase.from('notes').delete().eq('id', id);
-  if (!error) {
-    element.remove();
-    if (!els.notes.querySelector('.note')) els.notes.innerHTML = EMPTY_MSG;
-  }
+  await supabase.from('notes').delete().eq('id', id);
+  element.remove();
+  if (!els.notes.querySelector('.note')) els.notes.innerHTML = EMPTY_MSG;
 }
 
 function createNoteElement(note, isHTML = false) {
@@ -28,15 +26,13 @@ function createNoteElement(note, isHTML = false) {
   el.innerHTML = `<p>${note.text}</p><time>${new Date(note.created_at).toLocaleString()}</time><button>×</button>`;
   
   if (!isHTML) {
-    const btn = el.querySelector('button');
-    if (btn) btn.onclick = () => deleteNote(note.id, el);
+    el.querySelector('button').onclick = () => deleteNote(note.id, el);
     return el;
   }
   
   setTimeout(() => {
     const noteEl = els.notes.querySelector(`[data-id="${note.id}"]`);
-    const btn = noteEl?.querySelector('button');
-    if (btn) btn.onclick = () => deleteNote(note.id, noteEl);
+    if (noteEl) noteEl.querySelector('button').onclick = () => deleteNote(note.id, noteEl);
   });
   return el.outerHTML;
 }
@@ -46,8 +42,7 @@ async function addNote() {
   if (!text) return;
   const {data: {user}} = await supabase.auth.getUser();
   await supabase.from("notes").insert([{text, user_id: user.id}]);
-  els.input.value = "";
-  els.input.focus();
+  els.input.value = ""; els.input.focus();
 }
 
 async function setupNotesListener(userId) {
@@ -56,13 +51,11 @@ async function setupNotesListener(userId) {
   
   return supabase.channel(`notes:${userId}`)
     .on("postgres_changes", {...config, event: "INSERT"}, ({new: note}) => {
-      const emptyMsg = els.notes.querySelector(".empty-message");
-      if (emptyMsg) emptyMsg.remove();
+      els.notes.querySelector(".empty-message")?.remove();
       els.notes.insertBefore(createNoteElement(note), els.notes.firstChild);
     })
     .on("postgres_changes", {...config, event: "DELETE"}, ({old}) => {
-      const noteEl = els.notes.querySelector(`[data-id="${old.id}"]`);
-      if (noteEl) noteEl.remove();
+      els.notes.querySelector(`[data-id="${old.id}"]`)?.remove();
       if (!els.notes.querySelector('.note')) els.notes.innerHTML = EMPTY_MSG;
     })
     .subscribe();
@@ -74,8 +67,7 @@ async function loadNotes(userId) {
   
   data?.forEach(note => {
     const noteEl = els.notes.querySelector(`[data-id="${note.id}"]`);
-    const btn = noteEl?.querySelector('button');
-    if (btn) btn.onclick = () => deleteNote(note.id, noteEl);
+    if (noteEl) noteEl.querySelector('button').onclick = () => deleteNote(note.id, noteEl);
   });
 }
 
