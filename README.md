@@ -1,11 +1,18 @@
-# Supabase Notes App
+# Notes App
 
-A simple real-time notes application using Supabase for authentication and database.
+A real-time notes application with Google authentication.
+
+## Features
+
+- Google OAuth login
+- Add, view, and delete notes
+- Real-time note synchronization
+- Secure per-user note storage
 
 ## Setup
 
 1. Create a Supabase project at [supabase.com](https://supabase.com)
-2. Add your Supabase URL and anon key to `supabaseConfig.js`
+2. Add your Supabase URL and anon key to `script.js`
 3. Run SQL in Supabase dashboard:
 ```sql
 -- Create notes table
@@ -33,10 +40,19 @@ create policy "Users can delete their own notes" on notes for delete
 4. Enable Google Auth in Supabase Authentication settings
 5. Enable Realtime for the `notes` table in Supabase Database settings
 
-## Run Locally
+## Quick Start
 
 ```bash
 python -m http.server 3000
 ```
 
-Visit `http://localhost:3000`
+Open `http://localhost:3000` in your browser and log in with Google.
+
+## Tech Stack
+
+- Frontend: HTML, JavaScript
+- Backend: Supabase (Authentication & Database)
+
+---
+
+**Note:** This is a demo. It contains no confidential data/IP.
